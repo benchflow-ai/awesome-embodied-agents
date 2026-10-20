@@ -126,10 +126,11 @@ jobs:
 
             4. ROUTE each kept item into its CORRECT SECTION of `README.md`, inserted among that section's entries:
                §1 robot harnesses for coding agents (1a harnesses and robot OSes · 1b MCP servers and device standards ·
-               1c agents that write and improve robot skills) · §2 robot reasoning models and VLAs (2a embodied
-               reasoning · 2b VLAs · 2c policy learning from few demonstrations) · §3 world models · §4 benchmarks and
-               evaluations (4a agent-as-policy · 4b manipulation · 4c locomotion and dexterity · 4d navigation, driving
-               and aerial · 4e robot safety · 4f evaluation harnesses and real-robot evaluation · 4g benchmark integrity)
+               1c agents that write and improve robot code and skills) · §2 robot reasoning models and VLAs (2a embodied
+               reasoning · 2b VLAs and learned policies) · §3 world models (3a world-action and latent world models ·
+               3b world models as simulators and evaluators) · §4 benchmarks and evaluations (4a agent-as-policy ·
+               4b manipulation · 4c locomotion, whole-body and dexterity · 4d navigation and driving · 4e robot safety ·
+               4f evaluation harnesses and real-robot evaluation · 4g benchmark integrity)
                · §5 simulators and assets (5a simulators · 5b agents that build simulations · 5c robot models, scenes and
                objects) · §6 perception tools · §7 datasets · §8 talks · §9 landscape.
                Mirror the existing entry shape exactly:
