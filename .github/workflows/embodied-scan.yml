@@ -1,0 +1,250 @@
+name: Embodied Scan (find + update)
+
+# Daily curator for Awesome Embodied Agents. Claude Code finds NEW, high-signal items about agents that
+# act in the physical world, vets them against CONTRIBUTING.md, verifies every number against the live
+# page, and opens ONE review PR, or none. Runs on a Claude subscription OAuth token. The bot can NEVER
+# push to main or merge: a human approves every PR. Enforce that with a ruleset on main (see SCAN.md);
+# the prompt alone is not a guarantee.
+#
+# Ported from benchflow-ai/awesome-evals (.github/workflows/eval-scan.yml): the same single-job recipe,
+# with robotics sources (.scanner/seeds.json), the embodied bar, and scan state in .scanner/ that only
+# changes through an approved PR.
+
+on:
+  schedule:
+    - cron: "17 14 * * *"   # daily 14:17 UTC, an hour after awesome-evals' scan, so the two never overlap
+  workflow_dispatch:
+    inputs:
+      focus:
+        description: "Scope this run to one seeds.json group or topic (optional), e.g. arxiv, lab-blogs, world models"
+        required: false
+        default: ""
+      lookback_days:
+        description: "Days to look back when state is missing or old (default 14; 60 for a cold re-baseline)"
+        required: false
+        default: "14"
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: awesome-embodied-agents-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # Slack notifications stay OFF (steps no-op) unless BOTH secrets are set:
+      #   SLACK_BOT_TOKEN  — a Slack bot token with chat:write, invited to the channel
+      #   SLACK_CHANNEL_ID — the target channel's ID
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Opens the Slack thread for this run and captures its timestamp so the result posts
+      # as a threaded reply. Uses the Slack Web API directly (plain step, not the model).
+      - name: Notify Slack — scan started
+        id: slack_start
+        if: env.SLACK_BOT_TOKEN != '' && env.SLACK_CHANNEL_ID != ''
+        run: |
+          txt=$(printf ':mag: *Daily embodied-agents scan started* — %s\nScanning robotics lab blogs, arXiv cs.RO, Hugging Face, GitHub and talks for new agent-as-policy work, models, benchmarks, simulators and datasets. Finds (and rejections) get threaded here. <%s|View run>' "$(date -u +%F)" "$RUN_URL")
+          resp=$(curl -sS -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+            -H 'Content-type: application/json; charset=utf-8' \
+            -d "$(jq -n --arg ch "$SLACK_CHANNEL_ID" --arg txt "$txt" '{channel:$ch, text:$txt}')")
+          echo "ts=$(echo "$resp" | jq -r '.ts // empty')" >> "$GITHUB_OUTPUT"
+          # Stamped from the runner clock so the result step can tell a PR THIS run opened
+          # from one left open on an earlier day.
+          echo "started_at=$(date -u +%FT%TZ)" >> "$GITHUB_OUTPUT"
+          [ "$(echo "$resp" | jq -r .ok)" = "true" ] || echo "::warning::Slack start post failed: $(echo "$resp" | jq -r '.error // "unknown"')"
+
+      - name: Run the embodied scan
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Use the workflow token for git/PR ops instead of a minted Claude GitHub App token
+          # (the OIDC->app-token exchange is an external dependency that can 401). The scanner
+          # only needs to push a branch + open a PR, which GITHUB_TOKEN + permissions above cover.
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          settings: ".github/claude-scan-settings.json"
+          claude_args: "--model claude-sonnet-4-6 --max-turns 200"
+          prompt: |
+            You are the autonomous daily curator for **benchflow-ai/awesome-embodied-agents**, an annotated list of
+            agents that act in the physical world, with an emphasis on coding agents and LLMs as robot policies
+            ("agent as a policy"). Find NEW, genuinely high-signal items, vet them RUTHLESSLY, verify them, and open
+            ONE review PR, or none. You can NEVER push to `main` and NEVER merge; a human approves every PR.
+            Optional focus for this run: "${{ github.event.inputs.focus }}" (empty = full scan).
+            Lookback when state is missing or old: ${{ github.event.inputs.lookback_days || '14' }} days.
+
+            0. Run `date -u +%F` once and call it TODAY. Read `README.md`, `CONTRIBUTING.md` and `SCAN.md`. Collect
+               every URL AND entry title in `README.md` as your dedup set. Dedup by URL **and** by close title: an
+               arXiv abs page, its project page, its repo and its Hugging Face card are the same work.
+               Read `.scanner/seeds.json` (the source registry), `.scanner/rejected.json` (skip anything whose
+               `reason_class` is `on_merits`) and `.scanner/state.json`. FLOOR = the later of `state.last_run` and
+               TODAY minus the lookback above, then minus 3 days of overlap. Keep only items dated on or after FLOOR.
+
+            1. DISCOVER thoroughly — spawn one Task subagent per `seeds.json` group IN PARALLEL and actually fetch each
+               source; concluding "nothing new" without fetching the lab blogs and the arXiv cs.RO feed is a FAILED run:
+               - lab-blogs: robotics labs and companies (feeds first; for JavaScript-heavy pages marked `recall_critical`
+                 also run WebSearch recency queries, e.g. `site:pi.website robot` for the past two weeks);
+               - authors: perspectives and newsletters on robot-use agents;
+               - arxiv: the cs.RO daily feed and the API query in seeds.json (agents, coding agents, LLM-as-policy,
+                 world-action models, benchmarks, robot safety);
+               - hf: Hugging Face daily papers (robotics only) and trending robotics models;
+               - github: `gh api` searches for new robot-agent repos (MCP servers, harnesses, skills) and releases of the
+                 watched repos in seeds.json — authenticated `gh api` only, never WebFetch, for GitHub;
+               - podcasts-talks: the feeds in seeds.json, plus WebSearch for new talks on robot agents and world models;
+               - open-web: the WebSearch queries in seeds.json (launch posts, "agent as a policy", "robot use agent",
+                 "world action model", new robot benchmarks and leaderboards).
+
+            2. VET RUTHLESSLY against CONTRIBUTING.md. Keep only items with something to run or read in full: code,
+               weights, a public API, data, a paper, or a reproducible evaluation. A demo video, a social post or a
+               funding announcement with no artifact is not an entry. For every result, establish who judged success
+               (the simulator's state, a held-out checker, a human rater, or the agent itself), how many trials, and
+               whether it ran in simulation or on a real robot; self-reported, single-trial or agent-judged results need
+               a ⚠️. Check the licence of code, weights, data and assets; non-commercial, gated, missing or "coming soon"
+               needs a ⚠️. Tools need evidence that someone outside the authoring org uses them.
+               BOTH ERRORS ARE REAL. A single weak entry lowers trust in the list, but a MISS is just as bad: failing to
+               surface a major new agent-as-policy benchmark, a frontier lab's robotics model or API, or a retraction
+               of something ALREADY listed is a failed run. A typical day is 0-3 additions; zero is legitimate only when
+               you fetched the seams and nothing cleared the bar.
+               PER-ITEM REVIEW: for EACH surviving candidate, spawn its OWN Task subagent that (a) judges it against the
+               bar (keep/cut) and (b) assigns its target section (step 4). Never batch-judge.
+
+            3. VERIFY survivors: spawn skeptic subagents that re-fetch the live page (and the repo or model card). NEVER
+               state a number you cannot quote verbatim from one source sentence; drop anything you cannot verify.
+               Check that every URL resolves and is the canonical one (not a mirror or an aggregator).
+
+            4. ROUTE each kept item into its CORRECT SECTION of `README.md`, inserted among that section's entries:
+               §1 robot harnesses for coding agents (1a harnesses and robot OSes · 1b MCP servers and device standards ·
+               1c agents that write and improve robot skills) · §2 robot reasoning models and VLAs (2a embodied
+               reasoning · 2b VLAs · 2c policy learning from few demonstrations) · §3 world models · §4 benchmarks and
+               evaluations (4a agent-as-policy · 4b manipulation · 4c locomotion and dexterity · 4d navigation, driving
+               and aerial · 4e robot safety · 4f evaluation harnesses and real-robot evaluation · 4g benchmark integrity)
+               · §5 simulators and assets (5a simulators · 5b agents that build simulations · 5c robot models, scenes and
+               objects) · §6 perception tools · §7 datasets · §8 talks · §9 landscape.
+               Mirror the existing entry shape exactly:
+               `- **[Title](url)** — Org — <url> · *type, YYYY-MM-DD* — what it is and why it belongs. 🆕 ⚠️ caveat.`
+               NEVER create a catch-all "Scan additions" bucket. If a listed item has been retracted, archived or moved,
+               fix or flag that entry instead of adding a new one.
+
+            5. If ≥1 item clears the bar: create branch `scan/<TODAY>`, edit `README.md`, set `last_run` in
+               `.scanner/state.json` to TODAY and `last_checked` for each source you fetched, append each candidate you
+               rejected ON ITS MERITS to `.scanner/rejected.json` ({url, title, date, reason_class: "on_merits", reason}),
+               commit (plain message, NO AI/Claude attribution or "Generated with" line), push, and open ONE PR
+               (base=`main`) titled "Scan <TODAY>: N new find(s)" whose body lists each addition, its section, the
+               verbatim quote proving any number, who judged success and how many trials, the licence, and why it
+               clears the bar. NEVER push to `main`. If nothing clears the bar, change nothing and report "no new items".
+
+            6. ALWAYS end your final message with a SEARCH REPORT, whether or not you opened a PR:
+               - every feed, index or search you actually fetched, as a plain URL list, grouped by seeds.json group;
+               - every candidate you considered but rejected, one line each with the reject reason;
+               - the counts: N sources fetched, M candidates considered, K added.
+               A "no new items" answer with an empty or missing search report is a FAILED run.
+
+            Be exhaustive in discovery, ruthless in inclusion — the list's value is curation, not volume.
+
+      # Reduces the execution log to a tool-call audit trail: tool NAME + INPUT only, with every
+      # tool_result dropped. Tool results are where `cat`/`Read` output — hence any env secret —
+      # would land, and artifact bytes are NOT secret-masked by the runner, so they must not ship.
+      # What survives is the one thing that answers "did the scan actually look?": which URLs it fetched.
+      - name: Build tool-call audit trail
+        id: audit
+        if: always()
+        env:
+          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          src="${EXEC_FILE:-$RUNNER_TEMP/claude-execution-output.json}"
+          if [ ! -f "$src" ]; then
+            echo "::warning::No execution log at $src — nothing to audit."
+            exit 0
+          fi
+          out="$RUNNER_TEMP/claude-tool-calls.json"
+          # Every jq is guarded: a truncated execution file must degrade to a warning,
+          # never kill the step and swallow the Slack summary.
+          if ! jq '{ tool_calls: [ .[]
+                       | select(.type == "assistant")
+                       | { uuid,
+                           tool_calls: [ .message.content[]?
+                                         | select(.type == "tool_use")
+                                         | { name, input } ] }
+                       | select(.tool_calls | length > 0) ],
+                     report: ([ .[]
+                                | select(.type == "result")
+                                | { subtype, is_error, num_turns, result: (.result // "") } ] | last) }' \
+                  "$src" > "$out" 2>/dev/null; then
+            echo "::warning::Could not parse $src — SDK message shape may have changed."
+            exit 0
+          fi
+          calls=$(jq '[.tool_calls[].tool_calls[]] | length' "$out" 2>/dev/null || echo 0)
+          fetched=$(jq -r '[ .tool_calls[].tool_calls[]
+                             | select(.name == "WebFetch" or .name == "WebSearch")
+                             | (.input.url // .input.query // empty) ] | unique | length' "$out" 2>/dev/null || echo 0)
+          echo "path=$out" >> "$GITHUB_OUTPUT"
+          echo "summary=${calls} tool calls · ${fetched} distinct fetches/searches" >> "$GITHUB_OUTPUT"
+          echo "Tool calls recorded: $calls (distinct fetches/searches: $fetched)"
+
+      - name: Upload tool-call audit trail
+        if: always() && steps.audit.outputs.path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-tool-calls-${{ github.run_id }}
+          path: ${{ steps.audit.outputs.path }}
+          if-no-files-found: warn
+          retention-days: 14
+
+      # Threads the outcome under the start message: the finds preview + a link to review/merge
+      # the PR, or "no new items", or a failure note. Runs even if the scan step failed.
+      - name: Notify Slack — scan result
+        if: always() && env.SLACK_BOT_TOKEN != '' && env.SLACK_CHANNEL_ID != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          THREAD_TS: ${{ steps.slack_start.outputs.ts }}
+          RUN_STARTED_AT: ${{ steps.slack_start.outputs.started_at }}
+          JOB_STATUS: ${{ job.status }}
+          TOOL_SUMMARY: ${{ steps.audit.outputs.summary }}
+        run: |
+          # Only a scan/* PR opened DURING this run counts as this run's result. Fails closed:
+          # no timestamp => no PR matched, never "match all".
+          pr=''
+          lookup_ok=1
+          if [ -n "${RUN_STARTED_AT:-}" ]; then
+            if raw=$(gh pr list -R "$GITHUB_REPOSITORY" --base main --state open \
+                       --json number,title,url,body,headRefName,createdAt 2>/dev/null); then
+              pr=$(printf '%s' "$raw" | jq -c --arg since "$RUN_STARTED_AT" \
+                     '[.[] | select(.headRefName | startswith("scan/"))
+                           | select(.createdAt >= $since)] | sort_by(.number) | last // empty' 2>/dev/null || true)
+            else
+              lookup_ok=0
+            fi
+          fi
+          # Status is checked FIRST: a failed run must never be reported green just because a PR is open.
+          if [ "$JOB_STATUS" != "success" ]; then
+            txt=$(printf ':x: Scan run *%s*. <%s|Check the logs>\n_%s_' "$JOB_STATUS" "$RUN_URL" "${TOOL_SUMMARY:-no tool-call audit available}")
+            [ -n "$pr" ] && txt="$txt$(printf '\n:warning: A PR was opened before the failure: %s' "$(echo "$pr" | jq -r .url)")"
+          elif [ "$lookup_ok" -eq 0 ]; then
+            txt=$(printf ':warning: Scan finished, but the PR lookup failed — cannot tell whether a PR was opened. <%s|Check the run>\n_%s_' "$RUN_URL" "${TOOL_SUMMARY:-no tool-call audit available}")
+          elif [ -n "$pr" ]; then
+            num=$(echo "$pr" | jq -r .number); url=$(echo "$pr" | jq -r .url); title=$(echo "$pr" | jq -r .title)
+            finds=$(echo "$pr" | jq -r '.body' | grep -E '^- \*\*\[' | sed -E 's/^- \*\*\[([^]]*)\].*/• \1/' | head -20 || true)
+            [ -z "$finds" ] && finds='(see the PR for the itemized finds)'
+            txt=$(printf ':sparkles: *%s*\n%s\n\n<%s|Review & merge PR #%s> — _human approval required before anything lands_' "$title" "$finds" "$url" "$num")
+          else
+            txt=$(printf ':white_check_mark: Scan finished — *no new items today* (nothing cleared the bar).\n_%s_ · <%s|run log + tool-call artifact>' "${TOOL_SUMMARY:-no tool-call audit available}" "$RUN_URL")
+          fi
+          payload=$(jq -n --arg ch "$SLACK_CHANNEL_ID" --arg txt "$txt" --arg ts "${THREAD_TS:-}" \
+            '{channel:$ch, text:$txt} + (if $ts == "" then {} else {thread_ts:$ts} end)')
+          curl -sS -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+            -H 'Content-type: application/json; charset=utf-8' \
+            -d "$payload" \
+            | jq -e '.ok == true' >/dev/null || echo "::warning::Slack summary post failed"

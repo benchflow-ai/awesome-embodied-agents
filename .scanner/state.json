@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "_note": "Scan cursor. Changes only inside an approved scan PR. last_run = the date of the last scan PR (null = cold start: look back lookback_days); last_checked = when each source was last fetched in a scan that opened a PR.",
+  "last_run": null,
+  "sources": {
+    "deepmind-blog": {
+      "last_checked": null
+    },
+    "google-developers-blog": {
+      "last_checked": null
+    },
+    "nvidia-blog-robotics": {
+      "last_checked": null
+    },
+    "nvidia-developer-robotics": {
+      "last_checked": null
+    },
+    "nvidia-gear": {
+      "last_checked": null
+    },
+    "physical-intelligence": {
+      "last_checked": null
+    },
+    "anthropic-research": {
+      "last_checked": null
+    },
+    "openai-news": {
+      "last_checked": null
+    },
+    "huggingface-blog": {
+      "last_checked": null
+    },
+    "ai2-blog": {
+      "last_checked": null
+    },
+    "meta-ai-blog": {
+      "last_checked": null
+    },
+    "dimensional-research": {
+      "last_checked": null
+    },
+    "robocurve": {
+      "last_checked": null
+    },
+    "andon-labs": {
+      "last_checked": null
+    },
+    "dream-labs": {
+      "last_checked": null
+    },
+    "phillip-isola": {
+      "last_checked": null
+    },
+    "chris-paxton-it-can-think": {
+      "last_checked": null
+    },
+    "eric-jang": {
+      "last_checked": null
+    },
+    "arxiv-cs-ro": {
+      "last_checked": null
+    },
+    "arxiv-agents-query": {
+      "last_checked": null
+    },
+    "hf-papers": {
+      "last_checked": null
+    },
+    "hf-robotics-models": {
+      "last_checked": null
+    },
+    "gh-robot-agents": {
+      "last_checked": null
+    },
+    "gh-embodied-ai": {
+      "last_checked": null
+    },
+    "gh-robot-mcp": {
+      "last_checked": null
+    },
+    "gh-watched-releases": {
+      "last_checked": null
+    },
+    "latent-space": {
+      "last_checked": null
+    },
+    "talks-search": {
+      "last_checked": null
+    },
+    "open-web-launches": {
+      "last_checked": null
+    }
+  }
+}

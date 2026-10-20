@@ -1,0 +1,215 @@
+{
+  "version": 1,
+  "_note": "Human-editable source registry for the daily scan (one line adds a source). feed_url = RSS/Atom/JSON (cheapest, dated); index_url = HTML fallback; recall_critical = feedless or JavaScript-heavy page the scanner must back up with WebSearch recency queries; filter = what to keep from a general feed. GitHub sources are gh api calls ({FLOOR} = the scan's floor date), never WebFetch. Every URL here was checked (HTTP 200) on 2026-10-20.",
+  "groups": {
+    "lab-blogs": [
+      {
+        "id": "deepmind-blog",
+        "feed_url": "https://deepmind.google/blog/rss.xml",
+        "index_url": "https://deepmind.google/discover/blog/",
+        "filter": "robotics, Gemini Robotics, embodied reasoning, world models"
+      },
+      {
+        "id": "google-developers-blog",
+        "feed_url": "https://developers.googleblog.com/rss/",
+        "index_url": "https://developers.googleblog.com/",
+        "filter": "robotics, Gemini Robotics, Gemini API for robots"
+      },
+      {
+        "id": "nvidia-blog-robotics",
+        "feed_url": "https://blogs.nvidia.com/blog/category/robotics/feed/",
+        "index_url": "https://blogs.nvidia.com/blog/category/robotics/"
+      },
+      {
+        "id": "nvidia-developer-robotics",
+        "feed_url": "https://developer.nvidia.com/blog/category/robotics/feed/",
+        "index_url": "https://developer.nvidia.com/blog/category/robotics/"
+      },
+      {
+        "id": "nvidia-gear",
+        "feed_url": null,
+        "index_url": "https://research.nvidia.com/labs/gear/",
+        "recall_critical": true
+      },
+      {
+        "id": "physical-intelligence",
+        "feed_url": null,
+        "index_url": "https://www.pi.website/blog",
+        "recall_critical": true
+      },
+      {
+        "id": "anthropic-research",
+        "feed_url": null,
+        "index_url": "https://www.anthropic.com/research",
+        "recall_critical": true,
+        "filter": "robots, hardware, embodied studies"
+      },
+      {
+        "id": "openai-news",
+        "feed_url": "https://openai.com/news/rss.xml",
+        "index_url": null,
+        "filter": "robotics only",
+        "note": "the HTML index blocks non-browser clients; use the feed"
+      },
+      {
+        "id": "huggingface-blog",
+        "feed_url": "https://huggingface.co/blog/feed.xml",
+        "index_url": "https://huggingface.co/blog",
+        "filter": "LeRobot, robotics, Reachy Mini, world models"
+      },
+      {
+        "id": "ai2-blog",
+        "feed_url": null,
+        "index_url": "https://allenai.org/blog",
+        "filter": "robotics, MolmoAct, MolmoSpaces, vla-eval"
+      },
+      {
+        "id": "meta-ai-blog",
+        "feed_url": null,
+        "index_url": "https://ai.meta.com/blog/",
+        "recall_critical": true,
+        "filter": "robotics, V-JEPA, world models, simulators"
+      },
+      {
+        "id": "dimensional-research",
+        "feed_url": null,
+        "index_url": "https://research.dimensional.org/"
+      },
+      {
+        "id": "robocurve",
+        "feed_url": null,
+        "index_url": "https://robocurve.org/"
+      },
+      {
+        "id": "andon-labs",
+        "feed_url": null,
+        "index_url": "https://andonlabs.com/"
+      },
+      {
+        "id": "dream-labs",
+        "feed_url": null,
+        "index_url": "https://dreamlabs.ai/research/"
+      }
+    ],
+    "authors": [
+      {
+        "id": "phillip-isola",
+        "feed_url": null,
+        "index_url": "https://web.mit.edu/phillipi/www/"
+      },
+      {
+        "id": "chris-paxton-it-can-think",
+        "feed_url": "https://itcanthink.substack.com/feed",
+        "index_url": "https://itcanthink.substack.com/"
+      },
+      {
+        "id": "eric-jang",
+        "feed_url": "https://evjang.com/feed.xml",
+        "index_url": "https://evjang.com/"
+      }
+    ],
+    "arxiv": [
+      {
+        "id": "arxiv-cs-ro",
+        "feed_url": "https://rss.arxiv.org/rss/cs.RO",
+        "index_url": "https://arxiv.org/list/cs.RO/new",
+        "filter": "title screen: agents and coding agents controlling robots, LLM or VLM as policy, world-action models, benchmarks, leaderboards, robot safety, simulators, datasets"
+      },
+      {
+        "id": "arxiv-agents-query",
+        "feed_url": "https://export.arxiv.org/api/query?search_query=cat:cs.RO+AND+(abs:%22coding+agent%22+OR+abs:%22LLM+agent%22+OR+abs:%22agent+as+policy%22+OR+abs:%22world+action+model%22+OR+abs:benchmark)&sortBy=submittedDate&sortOrder=descending&max_results=40",
+        "index_url": null,
+        "note": "wait 3 seconds between arXiv API calls"
+      }
+    ],
+    "hf": [
+      {
+        "id": "hf-papers",
+        "feed_url": null,
+        "index_url": "https://huggingface.co/papers",
+        "filter": "robotics and embodied only"
+      },
+      {
+        "id": "hf-robotics-models",
+        "feed_url": "https://huggingface.co/api/models?pipeline_tag=robotics&sort=trendingScore&direction=-1&limit=50",
+        "index_url": "https://huggingface.co/models?pipeline_tag=robotics&sort=trending",
+        "filter": "new base models from labs; skip personal fine-tune checkpoints"
+      }
+    ],
+    "github": [
+      {
+        "id": "gh-robot-agents",
+        "gh_api": "search/repositories",
+        "q": "topic:robotics (agent OR mcp OR llm OR vla OR \"world model\") created:>={FLOOR}",
+        "sort": "stars"
+      },
+      {
+        "id": "gh-embodied-ai",
+        "gh_api": "search/repositories",
+        "q": "topic:embodied-ai created:>={FLOOR}",
+        "sort": "stars"
+      },
+      {
+        "id": "gh-robot-mcp",
+        "gh_api": "search/repositories",
+        "q": "topic:mcp (robot OR ros OR ros2 OR drone) created:>={FLOOR}",
+        "sort": "stars"
+      },
+      {
+        "id": "gh-watched-releases",
+        "gh_api": "repos/<repo>/releases?per_page=5",
+        "repos": [
+          "dimensionalOS/dimos",
+          "stacx-lab/kinex",
+          "robocurve/inspect-robots",
+          "huggingface/lerobot",
+          "capgym/cap-x",
+          "RLE-Bench/RLE-Bench",
+          "NVlabs/ASPIRE",
+          "Physical-Intelligence/openpi",
+          "NVIDIA/Isaac-GR00T",
+          "allenai/vla-evaluation-harness",
+          "XPolicyLab/XPolicyLab",
+          "isaac-sim/IsaacLab",
+          "google-deepmind/mujoco",
+          "newton-physics/newton",
+          "Genesis-Embodied-AI/genesis-world",
+          "StanfordVL/BEHAVIOR-1K"
+        ],
+        "note": "a release is a candidate only if it changes what the list says (new capability, licence change, archive)"
+      }
+    ],
+    "podcasts-talks": [
+      {
+        "id": "latent-space",
+        "feed_url": "https://api.substack.com/feed/podcast/1084089.rss",
+        "index_url": "https://www.latent.space/podcast",
+        "filter": "robotics, world models, embodied agents"
+      },
+      {
+        "id": "talks-search",
+        "queries": [
+          "robot foundation model talk 2026",
+          "coding agents robotics talk",
+          "world action model talk",
+          "robot-use agents lecture"
+        ]
+      }
+    ],
+    "open-web": [
+      {
+        "id": "open-web-launches",
+        "recall_critical": true,
+        "queries": [
+          "\"agent as a policy\" robot",
+          "\"robot-use agent\"",
+          "\"world action model\" API",
+          "coding agent controls robot benchmark",
+          "robot policy leaderboard launch",
+          "robot MCP server release",
+          "embodied reasoning model API"
+        ]
+      }
+    ]
+  }
+}
